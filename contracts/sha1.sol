@@ -1,4 +1,4 @@
-pragma solidity ^0.4.17;
+pragma solidity ^0.4.15;
 
 contract iSHA1 {
     function sha1(bytes message) public constant returns(bytes20 ret);
