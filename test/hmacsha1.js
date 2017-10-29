@@ -1,12 +1,12 @@
 const iSHA1 = artifacts.require('./iSHA1.sol')
 const SHA1 = artifacts.require('./SHA1.sol')
-const HMACSHA1 = artifacts.require('./testrpcHMACSHA1.sol')
+const HMACSHA1 = artifacts.require('./HMACSHA1.sol')
 const vectors = require('hash-test-vectors/hmac.json')
 
 contract('HMACSHA1', function(accounts) {
     let totalGas = 0;
     vectors.forEach(function(v, i) {
-        it('hmacsha1.sol against test vector ' + i, async function() {
+        it.only('hmacsha1.sol against test vector ' + i, async function() {
             const sha1Address = (await SHA1.deployed()).address
             const hmacInstance = (await HMACSHA1.deployed())
             const key = '0x' + v.key

@@ -12,67 +12,60 @@ contract HMACSHA1 {
     if (key.length > 64) {
       digest = shaLib.sha1(key);
       assembly {
+        // incrementing freemem here after an external call
+        // may be safer, but more expensive
+        //mstore(0x40, msize)
         mstore(add(key, 32), digest)
         mstore(key, 20)
       }
-      // delete digest; useless, doesn't delete item from stack
-      // also compiler now regulates balanced stack...
-      // allow us to remove from stack pl0x
     }
 
     if (key.length < 64) {
       assembly {
-        // NOTE enable for testrpc
-        // mstore(0x40, 0x400) // FIXME testrpc workaround, seems the free memory
-        // offset tracker is broken there with long calladata?
         mstore(add(mload(0x40), 32), mload(add(key, 32)))
         key := mload(0x40)
+        mstore(add(key, 64), 0)
         mstore(key, 64)
-
-        /* Dynamic memory resize for general hmac
-        switch mload(key)
-        case 0 {}
-        default {
-          mstore(0x40, add(mload(0x40), mul(div(sub(mload(key), 1), 32), 0x10)))
-        }
-        */
-        mstore(0x40, add(mload(0x40), mul(3, 0x20)))
+        mstore(0x40, msize)
       }
     }
 
-    bytes memory o_pad = hex'5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c';
-    bytes memory i_pad = hex'36363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636';
     bytes memory o_key_pad;
     bytes memory i_key_pad;
     bytes memory pass1;
     assembly {
       o_key_pad := mload(0x40)
       mstore(o_key_pad, 64)
-      mstore(0x40, add(mload(0x40), mul(3, 0x20)))
-      mstore(add(o_key_pad, 32), xor(mload(add(o_pad, 32)), mload(add(key, 32))))
-      mstore(add(o_key_pad, 64), xor(mload(add(o_pad, 64)), mload(add(key, 64))))
+      mstore(add(o_key_pad, 32), xor(mload(add(key, 32)), 0x5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c))
+      mstore(add(o_key_pad, 64), xor(mload(add(key, 64)), 0x5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c))
+      mstore(0x40, msize)
+
       i_key_pad := mload(0x40)
       mstore(i_key_pad, 64)
-      mstore(0x40, add(mload(0x40), mul(3, 0x20)))
-      mstore(add(i_key_pad, 32), xor(mload(add(i_pad, 32)), mload(add(key, 32))))
-      mstore(add(i_key_pad, 64), xor(mload(add(i_pad, 64)), mload(add(key, 64))))
+      mstore(add(i_key_pad, 32), xor(mload(add(key, 32)), 0x3636363636363636363636363636363636363636363636363636363636363636))
+      mstore(add(i_key_pad, 64), xor(mload(add(key, 64)), 0x3636363636363636363636363636363636363636363636363636363636363636))
+      mstore(0x40, msize)
+
       pass1 := mload(0x40)
       mstore(pass1, add(mload(i_key_pad), mload(message)))
-      mstore(0x40, add(mload(0x40), add(mul(div(mload(pass1), 32), 0x20), 0x20)))
-      /*for { let i:= 0 } lt(i, div(mload(pass1), 32)) { i:= add(i,1) } {
-          mstore(add(add(pass1, 32), mul(i, 32)), )
-      }*/
+      mstore(0x40, msize)
     }
     copyBytes(i_key_pad, 0, i_key_pad.length, pass1, 0);
     copyBytes(message, 0, message.length, pass1, i_key_pad.length);
 
-    digest = shaLib.sha1(pass1);
-
-    bytes memory pass2;
+    // workaround for other resize which seems to fail
     assembly {
+      mstore(0x40, msize)
+    }
+
+    digest = shaLib.sha1(pass1);
+    bytes memory pass2;
+
+    assembly {
+      // mstore(0x40, msize) this causes all hmacs to fail
       pass2 := mload(0x40)
-      mstore(pass2, add(mload(o_key_pad), 20))
-      mstore(0x40, add(mload(0x40), add(mul(div(mload(pass2), 32), 0x20), 0x20)))
+      mstore(pass2, add(mload(o_key_pad), 20)) // set length to current o_pad + hash length of 20 bytes from sha1
+      mstore(0x40, msize)
     }
 
     copyBytes(o_key_pad, 0, o_key_pad.length, pass2, 0);
